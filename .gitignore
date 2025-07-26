@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+prompt_for_elevenlabs_test.txt
+generated_prompt_example.txt
+
+# Test files
+test_*.py
+
+# Local deployment scripts
+deploy_local_test.py
+quick_deploy.py
+start_api.py
