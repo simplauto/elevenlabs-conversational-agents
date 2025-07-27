@@ -296,7 +296,7 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
         
         # Générer les jours manquants avec créneaux vides
         # Créer une structure complète des jours demandés
-        start_dt = datetime.fromisoformat(start_date)
+        start_dt = datetime.fromisoformat(request.start_date)
         end_dt = datetime.fromisoformat(end_date) if end_date else start_dt + timedelta(days=14)
         
         # Grouper les créneaux par date
