@@ -240,12 +240,6 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
             next_monday = today + timedelta(days=days_until_next_monday)
             next_sunday = next_monday + timedelta(days=6)
             
-            # Debug info
-            print(f"DEBUG: today={today} ({day_names[today_weekday]})")
-            print(f"DEBUG: slot_date={slot_date} ({day_names[slot_weekday]})")
-            print(f"DEBUG: delta={delta} jours")
-            print(f"DEBUG: next_monday={next_monday}, next_sunday={next_sunday}")
-            print(f"DEBUG: slot dans semaine prochaine? {next_monday <= slot_date <= next_sunday}")
             
             if next_monday <= slot_date <= next_sunday:
                 return f"{day_names[slot_weekday]} prochain"
