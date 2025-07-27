@@ -65,8 +65,8 @@ class MockDatabase:
     async def get_available_slots(
         self, 
         center_id: str, 
-        start_date: str, 
-        end_date: str,
+        start_date: Optional[str], 
+        end_date: Optional[str],
         vehicle_type: str,
         preferred_time: str
     ) -> List[AvailableSlot]:
@@ -172,20 +172,35 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
     Webhook appelé par ElevenLabs pour récupérer les créneaux disponibles
     """
     try:
-        # Calcul de la date de fin si non fournie
-        end_date = request.end_date
-        if not end_date:
-            start = datetime.fromisoformat(request.start_date)
-            end_date = (start + timedelta(days=14)).strftime("%Y-%m-%d")
+        # Import des utilitaires de date
+        from datetime_utils import get_paris_datetime
         
-        # Récupération des créneaux
+        # TOUJOURS récupérer TOUS les créneaux disponibles (ignorer start_date)
+        # Ceci évite les erreurs de calcul de dates par le LLM
         slots = await db.get_available_slots(
             center_id=center_id,
-            start_date=request.start_date,
-            end_date=end_date,
+            start_date=None,  # Ne pas filtrer par date
+            end_date=None,    # Ne pas filtrer par date
             vehicle_type=request.vehicle_type,
             preferred_time=request.preferred_time
         )
+        
+        # Auto-déterminer la période à partir des créneaux réels
+        if slots:
+            # Extraire toutes les dates des créneaux
+            slot_dates = []
+            for slot in slots:
+                clean_datetime = slot.datetime.replace('+02:00', '') if '+02:00' in slot.datetime else slot.datetime
+                slot_date = datetime.fromisoformat(clean_datetime).date()
+                slot_dates.append(slot_date)
+            
+            # Période : d'aujourd'hui jusqu'au dernier créneau
+            start_date = get_paris_datetime().strftime("%Y-%m-%d") 
+            end_date = max(slot_dates).strftime("%Y-%m-%d")
+        else:
+            # Pas de créneaux : période par défaut (aujourd'hui + 14 jours)
+            start_date = get_paris_datetime().strftime("%Y-%m-%d")
+            end_date = (get_paris_datetime() + timedelta(days=14)).strftime("%Y-%m-%d")
         
         # Format de réponse pour ElevenLabs
         if not slots:
@@ -196,7 +211,6 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
             }
         
         # Formatage des créneaux avec jour français et labels relatifs
-        from datetime_utils import get_paris_datetime
         
         formatted_slots = []
         day_names = {
@@ -296,8 +310,8 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
         
         # Générer les jours manquants avec créneaux vides
         # Créer une structure complète des jours demandés
-        start_dt = datetime.fromisoformat(request.start_date)
-        end_dt = datetime.fromisoformat(end_date) if end_date else start_dt + timedelta(days=14)
+        start_dt = datetime.fromisoformat(start_date)
+        end_dt = datetime.fromisoformat(end_date)
         
         # Grouper les créneaux par date
         slots_by_date = {}

@@ -21,23 +21,18 @@
 **Parameters:**
 ```json
 {
-  "start_date": {
-    "type": "string",
-    "description": "Date de début au format YYYY-MM-DD (ex: 2025-07-27)",
-    "required": true
-  },
   "vehicle_type": {
     "type": "string",
-    "description": "Type de véhicule: voiture_particuliere, utilitaire, moto, camping_car",
+    "description": "Type de véhicule du client: voiture_particuliere, utilitaire, moto, camping_car. Utiliser voiture_particuliere par défaut.",
     "default": "voiture_particuliere"
-  },
-  "preferred_time": {
-    "type": "string", 
-    "description": "Créneau préféré: morning, afternoon, any",
-    "default": "any"
   }
 }
 ```
+
+**IMPORTANT:**
+- ❌ **NE PAS ajouter start_date** - Évite les erreurs de calcul de dates par le LLM
+- ✅ **L'API récupère automatiquement TOUS les créneaux** disponibles  
+- ✅ **Dates calculées côté serveur** pour éviter "mardi 1er août" au lieu de "vendredi 1er août"
 
 ### 3. Ajouter le tool "book"
 
