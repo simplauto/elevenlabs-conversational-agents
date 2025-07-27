@@ -404,6 +404,10 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                         first_display = "cet après-midi"
                 elif first_half["relative_label"] == "après-demain":
                     first_display = f"après-demain {first_half['period']}"
+                elif "prochain" in first_half["relative_label"]:
+                    # Pour "lundi prochain", "jeudi prochain", etc.
+                    day_name = first_half["relative_label"].replace(" prochain", "")
+                    first_display = f"{day_name} {first_half['period']} prochain"
                 
                 if second_half["relative_label"] == "demain":
                     second_display = f"demain {second_half['period']}"
@@ -414,6 +418,10 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                         second_display = "cet après-midi"
                 elif second_half["relative_label"] == "après-demain":
                     second_display = f"après-demain {second_half['period']}"
+                elif "prochain" in second_half["relative_label"]:
+                    # Pour "lundi prochain", "jeudi prochain", etc.
+                    day_name = second_half["relative_label"].replace(" prochain", "")
+                    second_display = f"{day_name} {second_half['period']} prochain"
                 
                 response_message = f"Je peux vous proposer un créneau {first_display} ou {second_display} si vous le souhaitez."
                 
@@ -430,6 +438,10 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                         first_display = "cet après-midi"
                 elif first_half["relative_label"] == "après-demain":
                     first_display = f"après-demain {first_half['period']}"
+                elif "prochain" in first_half["relative_label"]:
+                    # Pour "lundi prochain", "jeudi prochain", etc.
+                    day_name = first_half["relative_label"].replace(" prochain", "")
+                    first_display = f"{day_name} {first_half['period']} prochain"
                 
                 response_message = f"Je peux vous proposer un créneau {first_display}."
             else:
