@@ -361,9 +361,9 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                     
                     for slot in day["slots"]:
                         hour = int(slot["time_only"].split(":")[0])
-                        if hour < 13:  # Avant 13h = matin
+                        if hour < 12:  # Avant 12h = matin
                             morning_slots.append(slot)
-                        else:  # 13h et après = après-midi
+                        else:  # 12h et après = après-midi
                             afternoon_slots.append(slot)
                     
                     # Ajouter les demi-journées disponibles
@@ -398,14 +398,20 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                 if first_half["relative_label"] == "demain":
                     first_display = f"demain {first_half['period']}"
                 elif first_half["relative_label"] == "aujourd'hui":
-                    first_display = f"aujourd'hui {first_half['period']}"
+                    if first_half['period'] == "matin":
+                        first_display = "ce matin"
+                    else:
+                        first_display = "cet après-midi"
                 elif first_half["relative_label"] == "après-demain":
                     first_display = f"après-demain {first_half['period']}"
                 
                 if second_half["relative_label"] == "demain":
                     second_display = f"demain {second_half['period']}"
                 elif second_half["relative_label"] == "aujourd'hui":
-                    second_display = f"aujourd'hui {second_half['period']}"
+                    if second_half['period'] == "matin":
+                        second_display = "ce matin"
+                    else:
+                        second_display = "cet après-midi"
                 elif second_half["relative_label"] == "après-demain":
                     second_display = f"après-demain {second_half['period']}"
                 
@@ -418,7 +424,10 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                 if first_half["relative_label"] == "demain":
                     first_display = f"demain {first_half['period']}"
                 elif first_half["relative_label"] == "aujourd'hui":
-                    first_display = f"aujourd'hui {first_half['period']}"
+                    if first_half['period'] == "matin":
+                        first_display = "ce matin"
+                    else:
+                        first_display = "cet après-midi"
                 elif first_half["relative_label"] == "après-demain":
                     first_display = f"après-demain {first_half['period']}"
                 
