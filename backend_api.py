@@ -15,6 +15,8 @@ class SlotRequest(BaseModel):
     end_date: Optional[str] = None
     vehicle_type: str = "voiture_particuliere"
     preferred_time: str = "any"
+    specific_day: Optional[str] = None  # Pour demander un jour spécifique
+    period: Optional[str] = None  # "matin" ou "après-midi" pour un jour spécifique
 
 class ClientInfo(BaseModel):
     first_name: str
@@ -400,76 +402,264 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                             "period_display": f"{day['day_display']} après-midi"
                         })
             
+            # Fonction pour formater une demi-journée avec heure
+            def format_half_day_with_time(half_day, time):
+                period = half_day["period"]
+                relative_label = half_day["relative_label"]
+                
+                # Simplifier selon les labels relatifs
+                if relative_label == "demain":
+                    return f"demain {period} à partir de {time}"
+                elif relative_label == "aujourd'hui":
+                    if period == "matin":
+                        return f"ce matin à partir de {time}"
+                    else:
+                        return f"cet après-midi à partir de {time}"
+                elif relative_label == "après-demain":
+                    return f"après-demain {period} à partir de {time}"
+                elif "prochain" in relative_label:
+                    # Pour "lundi prochain", "jeudi prochain", etc.
+                    day_name = relative_label.replace(" prochain", "")
+                    return f"{day_name} {period} prochain à partir de {time}"
+                elif relative_label and relative_label.startswith("ce "):
+                    # Pour "ce jeudi", "ce vendredi", etc.
+                    return f"{relative_label} {period} à partir de {time}"
+                else:
+                    # Fallback avec le display complet
+                    return f"{half_day['day_display']} {period} à partir de {time}"
+            
             # Proposer les 2 prochaines demi-journées disponibles
             if len(half_days) >= 2:
                 first_half = half_days[0]
                 second_half = half_days[1]
                 
-                # Simplifier l'affichage selon les labels relatifs
-                first_display = first_half["period_display"]
-                second_display = second_half["period_display"]
+                # Obtenir la première heure de chaque demi-journée
+                first_time = first_half["slots"][0]["time_only"]
+                second_time = second_half["slots"][0]["time_only"]
                 
-                # Simplifier pour les expressions courantes
-                if first_half["relative_label"] == "demain":
-                    first_display = f"demain {first_half['period']}"
-                elif first_half["relative_label"] == "aujourd'hui":
-                    if first_half['period'] == "matin":
-                        first_display = "ce matin"
-                    else:
-                        first_display = "cet après-midi"
-                elif first_half["relative_label"] == "après-demain":
-                    first_display = f"après-demain {first_half['period']}"
-                elif "prochain" in first_half["relative_label"]:
-                    # Pour "lundi prochain", "jeudi prochain", etc.
-                    day_name = first_half["relative_label"].replace(" prochain", "")
-                    first_display = f"{day_name} {first_half['period']} prochain"
+                first_display = format_half_day_with_time(first_half, first_time)
+                second_display = format_half_day_with_time(second_half, second_time)
                 
-                if second_half["relative_label"] == "demain":
-                    second_display = f"demain {second_half['period']}"
-                elif second_half["relative_label"] == "aujourd'hui":
-                    if second_half['period'] == "matin":
-                        second_display = "ce matin"
-                    else:
-                        second_display = "cet après-midi"
-                elif second_half["relative_label"] == "après-demain":
-                    second_display = f"après-demain {second_half['period']}"
-                elif "prochain" in second_half["relative_label"]:
-                    # Pour "lundi prochain", "jeudi prochain", etc.
-                    day_name = second_half["relative_label"].replace(" prochain", "")
-                    second_display = f"{day_name} {second_half['period']} prochain"
-                
-                response_message = f"Je peux vous proposer un créneau {first_display} ou {second_display} si vous le souhaitez."
+                response_message = f"J'ai des créneaux disponibles {first_display}, ou {second_display}."
                 
             elif len(half_days) == 1:
                 first_half = half_days[0]
-                first_display = first_half["period_display"]
+                first_time = first_half["slots"][0]["time_only"]
                 
-                if first_half["relative_label"] == "demain":
-                    first_display = f"demain {first_half['period']}"
-                elif first_half["relative_label"] == "aujourd'hui":
-                    if first_half['period'] == "matin":
-                        first_display = "ce matin"
-                    else:
-                        first_display = "cet après-midi"
-                elif first_half["relative_label"] == "après-demain":
-                    first_display = f"après-demain {first_half['period']}"
-                elif "prochain" in first_half["relative_label"]:
-                    # Pour "lundi prochain", "jeudi prochain", etc.
-                    day_name = first_half["relative_label"].replace(" prochain", "")
-                    first_display = f"{day_name} {first_half['period']} prochain"
+                first_display = format_half_day_with_time(first_half, first_time)
                 
-                response_message = f"Je peux vous proposer un créneau {first_display}."
+                response_message = f"J'ai des créneaux disponibles {first_display}."
             else:
                 response_message = "Tous les créneaux sont complets pour la période demandée."
         else:
             response_message = "Aucun créneau disponible actuellement."
         
+        # Générer des phrases spécifiques pour chaque jour disponible
+        day_specific_messages = {}
+        for day in daily_availability:
+            if day["is_available"] and day["slots"]:
+                day_key = day["relative_label"] or day["day_name"]
+                slot_times = [slot["time_only"] for slot in day["slots"]]
+                
+                # Limiter à 4-5 créneaux pour éviter les listes trop longues
+                if len(slot_times) > 5:
+                    shown_times = slot_times[:4]
+                    times_text = ", ".join(shown_times) + ", etc."
+                else:
+                    times_text = ", ".join(slot_times)
+                
+                # Construire la phrase naturelle pour ce jour
+                if day["relative_label"] == "demain":
+                    day_specific_messages[day_key] = f"Demain, j'ai de la place à {times_text}."
+                elif day["relative_label"] == "aujourd'hui":
+                    day_specific_messages[day_key] = f"Aujourd'hui, j'ai de la place à {times_text}."
+                elif day["relative_label"] == "après-demain":
+                    day_specific_messages[day_key] = f"Après-demain, j'ai de la place à {times_text}."
+                elif "prochain" in day["relative_label"]:
+                    day_specific_messages[day_key] = f"{day['relative_label'].capitalize()}, j'ai de la place à {times_text}."
+                elif day["relative_label"] and day["relative_label"].startswith("ce "):
+                    day_specific_messages[day_key] = f"{day['relative_label'].capitalize()}, j'ai de la place à {times_text}."
+                else:
+                    # Format avec date complète
+                    day_specific_messages[day_key] = f"{day['day_display']}, j'ai de la place à {times_text}."
+
+        # Si un jour spécifique est demandé
+        if request.specific_day:
+            # Import des utilitaires de date
+            from datetime_utils import get_paris_datetime
+            
+            # Calculer la date cible selon l'expression utilisée
+            target_date = None
+            now_paris = get_paris_datetime()
+            today = now_paris.date()
+            
+            specific_day_lower = request.specific_day.lower()
+            
+            # Extraire le nom du jour
+            day_names_fr = {
+                'lundi': 0, 'mardi': 1, 'mercredi': 2, 'jeudi': 3, 
+                'vendredi': 4, 'samedi': 5, 'dimanche': 6
+            }
+            
+            target_weekday = None
+            for day_name, weekday in day_names_fr.items():
+                if day_name in specific_day_lower:
+                    target_weekday = weekday
+                    break
+            
+            if target_weekday is None:
+                # Gérer les cas spéciaux comme "demain", "après-demain"
+                if "demain" in specific_day_lower:
+                    target_date = today + timedelta(days=1)
+                elif "après-demain" in specific_day_lower:
+                    target_date = today + timedelta(days=2)
+                else:
+                    return {"response": f"Désolé, je n'ai pas compris quel jour vous voulez dire par '{request.specific_day}'."}
+            else:
+                # Calculer la date selon l'expression
+                if "suivant" in specific_day_lower or "d'après" in specific_day_lower:
+                    # Chercher le lundi suivant = 2ème occurrence
+                    days_ahead = target_weekday - today.weekday()
+                    if days_ahead <= 0:  # Si c'est dans le passé cette semaine
+                        days_ahead += 7  # Semaine prochaine
+                    days_ahead += 7  # Puis la semaine d'après pour "suivant"
+                    target_date = today + timedelta(days=days_ahead)
+                elif "prochain" in specific_day_lower:
+                    # Prochain lundi = 1ère occurrence
+                    days_ahead = target_weekday - today.weekday()
+                    if days_ahead <= 0:  # Si c'est dans le passé cette semaine
+                        days_ahead += 7  # Semaine prochaine
+                    target_date = today + timedelta(days=days_ahead)
+                else:
+                    # Juste "lundi" = prochain lundi par défaut
+                    days_ahead = target_weekday - today.weekday()
+                    if days_ahead <= 0:
+                        days_ahead += 7
+                    target_date = today + timedelta(days=days_ahead)
+            
+            # Chercher le jour correspondant dans daily_availability
+            target_day = None
+            for day in daily_availability:
+                if day["is_available"] and day["slots"]:
+                    # Extraire la date du jour
+                    for slot in day["slots"]:
+                        slot_datetime_str = slot["full_text"] if "full_text" in slot else slot.get("base_text", "")
+                        # Utiliser la date ISO du slot
+                        for original_slot in slots:
+                            if original_slot.slot_id == slot["id"]:
+                                clean_datetime = original_slot.datetime.replace('+02:00', '') if '+02:00' in original_slot.datetime else original_slot.datetime
+                                slot_date = datetime.fromisoformat(clean_datetime).date()
+                                if slot_date == target_date:
+                                    target_day = day
+                                    break
+                        if target_day:
+                            break
+                if target_day:
+                    break
+            
+            if not target_day:
+                # Formater la date cible pour le message d'erreur
+                day_names_display = {
+                    0: 'lundi', 1: 'mardi', 2: 'mercredi', 3: 'jeudi', 
+                    4: 'vendredi', 5: 'samedi', 6: 'dimanche'
+                }
+                month_names = {
+                    1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
+                    7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre"
+                }
+                
+                day_name_display = day_names_display[target_date.weekday()]
+                month_name = month_names[target_date.month]
+                
+                return {"response": f"Désolé, je n'ai pas de créneaux disponibles pour le {day_name_display} {target_date.day} {month_name}. Je peux vous proposer d'autres jours si vous le souhaitez."}
+            
+            # Si une période (matin/après-midi) est précisée
+            if request.period:
+                # Filtrer les créneaux selon la période
+                period_slots = []
+                for slot in target_day["slots"]:
+                    hour = int(slot["time_only"].split(":")[0])
+                    if request.period == "matin" and hour < 12:
+                        period_slots.append(slot)
+                    elif request.period == "après-midi" and hour >= 12:
+                        period_slots.append(slot)
+                
+                if not period_slots:
+                    return {"response": f"Désolé, je n'ai pas de créneaux disponibles {request.specific_day} {request.period}."}
+                
+                # Limiter à 4-5 créneaux + etc.
+                if len(period_slots) > 5:
+                    shown_slots = period_slots[:4]
+                    times_text = ", ".join([slot["time_only"] for slot in shown_slots]) + ", etc."
+                else:
+                    times_text = ", ".join([slot["time_only"] for slot in period_slots])
+                
+                # Construire la phrase pour la période avec la date calculée
+                day_names_display = {
+                    0: 'lundi', 1: 'mardi', 2: 'mercredi', 3: 'jeudi', 
+                    4: 'vendredi', 5: 'samedi', 6: 'dimanche'
+                }
+                month_names = {
+                    1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
+                    7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre"
+                }
+                
+                day_name_display = day_names_display[target_date.weekday()]
+                month_name = month_names[target_date.month]
+                day_display = f"{day_name_display} {target_date.day} {month_name}"
+                
+                return {"response": f"Pour {day_display} {request.period}, j'ai {times_text}. Quelle heure vous arrange ?"}
+            
+            # Si pas de période précisée, demander matin/après-midi
+            else:
+                # Vérifier s'il y a des créneaux matin et après-midi
+                morning_slots = []
+                afternoon_slots = []
+                
+                for slot in target_day["slots"]:
+                    hour = int(slot["time_only"].split(":")[0])
+                    if hour < 12:
+                        morning_slots.append(slot)
+                    else:
+                        afternoon_slots.append(slot)
+                
+                # Utiliser la date calculée pour l'affichage
+                day_names_display = {
+                    0: 'lundi', 1: 'mardi', 2: 'mercredi', 3: 'jeudi', 
+                    4: 'vendredi', 5: 'samedi', 6: 'dimanche'
+                }
+                month_names = {
+                    1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
+                    7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre"
+                }
+                
+                day_name_display = day_names_display[target_date.weekday()]
+                month_name = month_names[target_date.month]
+                day_display = f"{day_name_display} {target_date.day} {month_name}"
+                
+                if morning_slots and afternoon_slots:
+                    return {"response": f"Pour {day_display}, plutôt le matin ou l'après-midi ?"}
+                elif morning_slots:
+                    # Seulement matin disponible
+                    if len(morning_slots) > 5:
+                        shown_slots = morning_slots[:4]
+                        times_text = ", ".join([slot["time_only"] for slot in shown_slots]) + ", etc."
+                    else:
+                        times_text = ", ".join([slot["time_only"] for slot in morning_slots])
+                    return {"response": f"Pour {day_display}, j'ai seulement le matin : {times_text}. Quelle heure vous arrange ?"}
+                elif afternoon_slots:
+                    # Seulement après-midi disponible
+                    if len(afternoon_slots) > 5:
+                        shown_slots = afternoon_slots[:4]
+                        times_text = ", ".join([slot["time_only"] for slot in shown_slots]) + ", etc."
+                    else:
+                        times_text = ", ".join([slot["time_only"] for slot in afternoon_slots])
+                    return {"response": f"Pour {day_display}, j'ai seulement l'après-midi : {times_text}. Quelle heure vous arrange ?"}
+        
+        # Retourner UNIQUEMENT le message principal que l'agent doit prononcer
+        # L'agent doit répéter exactement ce message sans interprétation
         return {
-            "message": response_message,
-            "daily_availability": daily_availability,
-            "slots": formatted_slots,  # Retourner tous les créneaux formatés  
-            "total_available": len(slots),
-            "instructions": "Utilisez exactement le texte du message ci-dessus. Si un jour est demandé spécifiquement, consultez daily_availability pour voir s'il est complet."
+            "response": response_message
         }
         
     except Exception as e:

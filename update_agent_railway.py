@@ -70,30 +70,14 @@ async def update_agent_with_railway(railway_url):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "start_date": {
-                            "type": "string",
-                            "format": "date",
-                            "description": "Date de début de recherche (YYYY-MM-DD)"
-                        },
-                        "end_date": {
-                            "type": "string", 
-                            "format": "date",
-                            "description": "Date de fin de recherche (YYYY-MM-DD)"
-                        },
                         "vehicle_type": {
                             "type": "string",
-                            "enum": ["voiture_particuliere", "utilitaire", "moto", "camping_car"],
-                            "description": "Type de véhicule",
+                            "enum": ["voiture_particuliere", "4x4", "utilitaire", "moto", "camping_car"],
+                            "description": "Demander: 'C'est pour une voiture particulière ou un utilitaire ?' Si voiture particulière, demander: 'Est-ce un véhicule 4 roues motrices ?' Types possibles: voiture_particuliere, 4x4, utilitaire, moto, camping_car. Par défaut voiture_particuliere.",
                             "default": "voiture_particuliere"
-                        },
-                        "preferred_time": {
-                            "type": "string",
-                            "enum": ["morning", "afternoon", "any"],
-                            "description": "Créneau préféré",
-                            "default": "any"
                         }
                     },
-                    "required": ["start_date", "vehicle_type"]
+                    "required": ["vehicle_type"]
                 }
             },
             {
