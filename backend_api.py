@@ -77,6 +77,7 @@ class MockDatabase:
         # Mapping des types de véhicules
         vehicle_type_mapping = {
             "voiture_particuliere": {"vehicle_type": 6, "vehicle_engine": 1},  # Voiture Essence par défaut
+            "4x4": {"vehicle_type": 7, "vehicle_engine": 1},  # 4x4 Essence par défaut
             "utilitaire": {"vehicle_type": 2, "vehicle_engine": 2},  # Utilitaire Diesel
             "moto": {"vehicle_type": 9, "vehicle_engine": 1},  # Moto Essence
             "camping_car": {"vehicle_type": 4, "vehicle_engine": 2}  # Camping-car Diesel

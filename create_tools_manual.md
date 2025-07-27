@@ -23,7 +23,7 @@
 {
   "vehicle_type": {
     "type": "string",
-    "description": "Type de véhicule du client: voiture_particuliere, utilitaire, moto, camping_car. Utiliser voiture_particuliere par défaut.",
+    "description": "Demander: 'C'est pour une voiture particulière ou un utilitaire ?' Si voiture particulière, demander: 'Est-ce un véhicule 4 roues motrices ?' Types possibles: voiture_particuliere, 4x4, utilitaire, moto, camping_car. Par défaut voiture_particuliere.",
     "default": "voiture_particuliere"
   }
 }
