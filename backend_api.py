@@ -348,36 +348,81 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
             
             current_date += timedelta(days=1)
         
-        # Générer le message pour l'agent
+        # Générer le message pour l'agent - Proposer les 2 prochaines demi-journées disponibles
         if formatted_slots:
-            # Identifier les jours avec créneaux
-            available_days = [day for day in daily_availability if day["is_available"]]
-            unavailable_days = [day for day in daily_availability if not day["is_available"]]
+            # Créer une liste des demi-journées avec disponibilité
+            half_days = []
             
-            if available_days:
-                first_day = available_days[0]
-                if len(available_days) == 1:
-                    response_message = f"Notre prochain créneau disponible est le {first_day['day_display']}."
-                    if first_day['slots']:
-                        response_message += f" Horaires disponibles : {', '.join([s['time_only'] for s in first_day['slots'][:3]])}."
-                else:
-                    day_list = []
-                    for day in available_days[:3]:  # Max 3 jours
-                        if day['slots']:
-                            times = ', '.join([s['time_only'] for s in day['slots'][:2]])  # Max 2 horaires par jour
-                            day_list.append(f"le {day['day_display']} ({times})")
-                        else:
-                            day_list.append(f"le {day['day_display']}")
+            for day in daily_availability:
+                if day["is_available"] and day["slots"]:
+                    # Séparer les créneaux matin/après-midi pour ce jour
+                    morning_slots = []
+                    afternoon_slots = []
                     
-                    response_message = f"Nos prochains créneaux disponibles sont : {', '.join(day_list[:-1])} ou {day_list[-1]}."
+                    for slot in day["slots"]:
+                        hour = int(slot["time_only"].split(":")[0])
+                        if hour < 13:  # Avant 13h = matin
+                            morning_slots.append(slot)
+                        else:  # 13h et après = après-midi
+                            afternoon_slots.append(slot)
+                    
+                    # Ajouter les demi-journées disponibles
+                    if morning_slots:
+                        half_days.append({
+                            "day_display": day["day_display"],
+                            "relative_label": day["relative_label"],
+                            "period": "matin",
+                            "slots": morning_slots,
+                            "period_display": f"{day['day_display']} matin"
+                        })
+                    
+                    if afternoon_slots:
+                        half_days.append({
+                            "day_display": day["day_display"],
+                            "relative_label": day["relative_label"],
+                            "period": "après-midi",
+                            "slots": afternoon_slots,
+                            "period_display": f"{day['day_display']} après-midi"
+                        })
+            
+            # Proposer les 2 prochaines demi-journées disponibles
+            if len(half_days) >= 2:
+                first_half = half_days[0]
+                second_half = half_days[1]
                 
-                # Mentionner les jours complets si demandés spécifiquement
-                if unavailable_days and len(daily_availability) <= 3:  # Si on a demandé peu de jours
-                    full_days = [day['day_display'] for day in unavailable_days]
-                    if len(full_days) == 1:
-                        response_message += f" {full_days[0]} est complet."
-                    else:
-                        response_message += f" {', '.join(full_days)} sont complets."
+                # Simplifier l'affichage selon les labels relatifs
+                first_display = first_half["period_display"]
+                second_display = second_half["period_display"]
+                
+                # Simplifier pour les expressions courantes
+                if first_half["relative_label"] == "demain":
+                    first_display = f"demain {first_half['period']}"
+                elif first_half["relative_label"] == "aujourd'hui":
+                    first_display = f"aujourd'hui {first_half['period']}"
+                elif first_half["relative_label"] == "après-demain":
+                    first_display = f"après-demain {first_half['period']}"
+                
+                if second_half["relative_label"] == "demain":
+                    second_display = f"demain {second_half['period']}"
+                elif second_half["relative_label"] == "aujourd'hui":
+                    second_display = f"aujourd'hui {second_half['period']}"
+                elif second_half["relative_label"] == "après-demain":
+                    second_display = f"après-demain {second_half['period']}"
+                
+                response_message = f"Je peux vous proposer un créneau {first_display} ou {second_display} si vous le souhaitez."
+                
+            elif len(half_days) == 1:
+                first_half = half_days[0]
+                first_display = first_half["period_display"]
+                
+                if first_half["relative_label"] == "demain":
+                    first_display = f"demain {first_half['period']}"
+                elif first_half["relative_label"] == "aujourd'hui":
+                    first_display = f"aujourd'hui {first_half['period']}"
+                elif first_half["relative_label"] == "après-demain":
+                    first_display = f"après-demain {first_half['period']}"
+                
+                response_message = f"Je peux vous proposer un créneau {first_display}."
             else:
                 response_message = "Tous les créneaux sont complets pour la période demandée."
         else:
