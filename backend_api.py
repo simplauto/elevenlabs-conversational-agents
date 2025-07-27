@@ -294,30 +294,101 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                 "price": f"{slot.price}€"
             })
         
-        # Message avec dates préformatées pour l'agent
-        if formatted_slots:
-            first_slot = formatted_slots[0]
-            if len(formatted_slots) == 1:
-                response_message = f"Notre prochain créneau disponible est le {first_slot['full_text']}."
+        # Générer les jours manquants avec créneaux vides
+        # Créer une structure complète des jours demandés
+        start_dt = datetime.fromisoformat(start_date)
+        end_dt = datetime.fromisoformat(end_date) if end_date else start_dt + timedelta(days=14)
+        
+        # Grouper les créneaux par date
+        slots_by_date = {}
+        for slot in formatted_slots:
+            slot_datetime_str = slot["id"]  # Utilisons l'ID pour retrouver la date originale
+            # Rechercher dans les créneaux originaux pour obtenir la date
+            for original_slot in slots:
+                if original_slot.slot_id == slot["id"]:
+                    clean_datetime = original_slot.datetime.replace('+02:00', '') if '+02:00' in original_slot.datetime else original_slot.datetime
+                    slot_date = datetime.fromisoformat(clean_datetime).date()
+                    if slot_date not in slots_by_date:
+                        slots_by_date[slot_date] = []
+                    slots_by_date[slot_date].append(slot)
+                    break
+        
+        # Générer la réponse structurée par jour
+        daily_availability = []
+        current_date = start_dt.date()
+        
+        while current_date <= end_dt.date() and len(daily_availability) < 7:  # Limiter à 7 jours
+            day_name = day_names[current_date.weekday()]
+            month_name = month_names[current_date.month]
+            
+            # Calculer le label relatif pour ce jour
+            relative_label = get_relative_label(current_date)
+            
+            # Format du jour
+            if relative_label:
+                if relative_label in ["aujourd'hui", "demain", "après-demain"]:
+                    day_display = f"{relative_label} ({day_name} {current_date.day} {month_name})"
+                else:
+                    day_display = f"{relative_label} ({current_date.day} {month_name})"
             else:
-                second_slot = formatted_slots[1] if len(formatted_slots) > 1 else None
-                third_slot = formatted_slots[2] if len(formatted_slots) > 2 else None
+                day_display = f"{day_name} {current_date.day} {month_name}"
+            
+            # Créneaux pour ce jour
+            day_slots = slots_by_date.get(current_date, [])
+            
+            daily_availability.append({
+                "date": current_date.isoformat(),
+                "day_display": day_display,
+                "relative_label": relative_label,
+                "day_name": day_name,
+                "slots_count": len(day_slots),
+                "slots": day_slots[:3],  # Max 3 créneaux par jour pour la lisibilité
+                "is_available": len(day_slots) > 0
+            })
+            
+            current_date += timedelta(days=1)
+        
+        # Générer le message pour l'agent
+        if formatted_slots:
+            # Identifier les jours avec créneaux
+            available_days = [day for day in daily_availability if day["is_available"]]
+            unavailable_days = [day for day in daily_availability if not day["is_available"]]
+            
+            if available_days:
+                first_day = available_days[0]
+                if len(available_days) == 1:
+                    response_message = f"Notre prochain créneau disponible est le {first_day['day_display']}."
+                    if first_day['slots']:
+                        response_message += f" Horaires disponibles : {', '.join([s['time_only'] for s in first_day['slots'][:3]])}."
+                else:
+                    day_list = []
+                    for day in available_days[:3]:  # Max 3 jours
+                        if day['slots']:
+                            times = ', '.join([s['time_only'] for s in day['slots'][:2]])  # Max 2 horaires par jour
+                            day_list.append(f"le {day['day_display']} ({times})")
+                        else:
+                            day_list.append(f"le {day['day_display']}")
+                    
+                    response_message = f"Nos prochains créneaux disponibles sont : {', '.join(day_list[:-1])} ou {day_list[-1]}."
                 
-                options = [f"le {first_slot['full_text']}"]
-                if second_slot:
-                    options.append(f"le {second_slot['full_text']}")
-                if third_slot:
-                    options.append(f"le {third_slot['full_text']}")
-                
-                response_message = f"Nos prochains créneaux disponibles sont : {', '.join(options[:-1])} ou {options[-1]}."
+                # Mentionner les jours complets si demandés spécifiquement
+                if unavailable_days and len(daily_availability) <= 3:  # Si on a demandé peu de jours
+                    full_days = [day['day_display'] for day in unavailable_days]
+                    if len(full_days) == 1:
+                        response_message += f" {full_days[0]} est complet."
+                    else:
+                        response_message += f" {', '.join(full_days)} sont complets."
+            else:
+                response_message = "Tous les créneaux sont complets pour la période demandée."
         else:
             response_message = "Aucun créneau disponible actuellement."
         
         return {
             "message": response_message,
-            "slots": formatted_slots[:5],  # Limiter à 5 pour l'agent
+            "daily_availability": daily_availability,
+            "slots": formatted_slots[:5],  # Limiter à 5 pour l'agent  
             "total_available": len(slots),
-            "instructions": "Utilisez exactement le texte du message ci-dessus. Ne recalculez pas les jours de la semaine."
+            "instructions": "Utilisez exactement le texte du message ci-dessus. Si un jour est demandé spécifiquement, consultez daily_availability pour voir s'il est complet."
         }
         
     except Exception as e:

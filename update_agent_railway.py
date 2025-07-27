@@ -64,7 +64,7 @@ async def update_agent_with_railway(railway_url):
                 "name": "get_slots",
                 "description": "Récupère les créneaux disponibles pour le centre",
                 "webhook": {
-                    "url": f"{railway_url}/webhook/elevenlabs/center_test_001/get_slots",
+                    "url": f"{railway_url}/webhook/elevenlabs/c07110e4-7ef8-49ee-9c2b-ab62a106c417/get_slots",
                     "method": "POST"
                 },
                 "parameters": {
@@ -100,7 +100,7 @@ async def update_agent_with_railway(railway_url):
                 "name": "book",
                 "description": "Réserve un créneau pour un client",
                 "webhook": {
-                    "url": f"{railway_url}/webhook/elevenlabs/center_test_001/book",
+                    "url": f"{railway_url}/webhook/elevenlabs/c07110e4-7ef8-49ee-9c2b-ab62a106c417/book",
                     "method": "POST"
                 },
                 "parameters": {
