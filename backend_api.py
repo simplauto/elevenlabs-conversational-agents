@@ -11,7 +11,7 @@ security = HTTPBearer()
 
 # Models Pydantic
 class SlotRequest(BaseModel):
-    start_date: str
+    start_date: Optional[str] = None
     end_date: Optional[str] = None
     vehicle_type: str = "voiture_particuliere"
     preferred_time: str = "any"
