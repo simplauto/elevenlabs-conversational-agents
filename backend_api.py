@@ -508,11 +508,39 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                     break
             
             if target_weekday is None:
-                # Gérer les cas spéciaux comme "demain", "après-demain"
+                # Gérer les cas spéciaux comme "demain", "après-demain", ou dates numériques
                 if "demain" in specific_day_lower:
                     target_date = today + timedelta(days=1)
                 elif "après-demain" in specific_day_lower:
                     target_date = today + timedelta(days=2)
+                elif any(month in specific_day_lower for month in ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']):
+                    # Gérer les dates comme "11 août"
+                    import re
+                    day_match = re.search(r'(\d{1,2})', specific_day_lower)
+                    month_match = None
+                    month_mapping = {
+                        'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4, 'mai': 5, 'juin': 6,
+                        'juillet': 7, 'août': 8, 'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+                    }
+                    
+                    for month_name, month_num in month_mapping.items():
+                        if month_name in specific_day_lower:
+                            month_match = month_num
+                            break
+                    
+                    if day_match and month_match:
+                        day_num = int(day_match.group(1))
+                        year = today.year
+                        # Si le mois est passé cette année, prendre l'année suivante
+                        if month_match < today.month or (month_match == today.month and day_num < today.day):
+                            year += 1
+                        
+                        try:
+                            target_date = datetime(year, month_match, day_num).date()
+                        except ValueError:
+                            return {"response": f"Désolé, la date '{request.specific_day}' n'est pas valide."}
+                    else:
+                        return {"response": f"Désolé, je n'ai pas compris la date '{request.specific_day}'."}
                 else:
                     return {"response": f"Désolé, je n'ai pas compris quel jour vous voulez dire par '{request.specific_day}'."}
             else:
