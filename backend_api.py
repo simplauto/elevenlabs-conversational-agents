@@ -134,7 +134,7 @@ class MockDatabase:
                 
                 slots = filtered_slots
             
-            return slots[:10]  # Limiter à 10 créneaux
+            return slots  # Retourner tous les créneaux disponibles
             
         except Exception as e:
             print(f"Erreur appel API Simplauto: {e}")
@@ -342,7 +342,7 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                 "relative_label": relative_label,
                 "day_name": day_name,
                 "slots_count": len(day_slots),
-                "slots": day_slots[:3],  # Max 3 créneaux par jour pour la lisibilité
+                "slots": day_slots,  # Tous les créneaux pour ce jour
                 "is_available": len(day_slots) > 0
             })
             
@@ -452,7 +452,7 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
         return {
             "message": response_message,
             "daily_availability": daily_availability,
-            "slots": formatted_slots[:5],  # Limiter à 5 pour l'agent  
+            "slots": formatted_slots,  # Retourner tous les créneaux formatés  
             "total_available": len(slots),
             "instructions": "Utilisez exactement le texte du message ci-dessus. Si un jour est demandé spécifiquement, consultez daily_availability pour voir s'il est complet."
         }
