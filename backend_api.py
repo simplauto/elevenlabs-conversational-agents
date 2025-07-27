@@ -195,13 +195,9 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
                 "suggestion": "Essayez une autre période ou appelez directement le centre"
             }
         
-        # Formatage des créneaux avec jour français correct
-        import locale
-        try:
-            locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
-        except:
-            pass  # Fallback si locale française non disponible
-            
+        # Formatage des créneaux avec jour français et labels relatifs
+        from datetime_utils import get_paris_datetime
+        
         formatted_slots = []
         day_names = {
             0: "lundi", 1: "mardi", 2: "mercredi", 3: "jeudi", 
@@ -212,17 +208,70 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
             7: "juillet", 8: "août", 9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre"
         }
         
+        # Date actuelle à Paris
+        now_paris = get_paris_datetime()
+        today = now_paris.date()
+        
+        def get_relative_label(slot_date):
+            """Calcule le label relatif pour une date"""
+            delta = (slot_date - today).days
+            slot_weekday = slot_date.weekday()
+            today_weekday = today.weekday()
+            
+            # Cas spéciaux
+            if delta == 0:
+                return "aujourd'hui"
+            elif delta == 1:
+                return "demain"
+            elif delta == 2:
+                return "après-demain"
+            
+            # Semaine prochaine (du lundi au dimanche suivant)
+            days_until_next_monday = (7 - today_weekday) % 7
+            if days_until_next_monday == 0:  # Si on est lundi
+                days_until_next_monday = 7
+            
+            next_monday = today + timedelta(days=days_until_next_monday)
+            next_sunday = next_monday + timedelta(days=6)
+            
+            if next_monday <= slot_date <= next_sunday:
+                return f"{day_names[slot_weekday]} prochain"
+            
+            return None
+        
         for slot in slots:
-            slot_dt = datetime.fromisoformat(slot.datetime)
+            # Nettoyer le datetime pour parser correctement
+            slot_datetime_str = slot.datetime
+            if '+02:00' in slot_datetime_str:
+                slot_datetime_str = slot_datetime_str.replace('+02:00', '')
+            
+            slot_dt = datetime.fromisoformat(slot_datetime_str)
+            slot_date = slot_dt.date()
+            
             day_name = day_names[slot_dt.weekday()]
             month_name = month_names[slot_dt.month]
             
-            # Format complet et correct
-            full_date_text = f"{day_name} {slot_dt.day} {month_name} {slot_dt.year} à {slot_dt.strftime('%H:%M')}"
+            # Calculer le label relatif
+            relative_label = get_relative_label(slot_date)
+            
+            # Format de base
+            base_text = f"{day_name} {slot_dt.day} {month_name} {slot_dt.year} à {slot_dt.strftime('%H:%M')}"
+            
+            # Format avec label relatif si applicable
+            if relative_label:
+                if relative_label in ["aujourd'hui", "demain", "après-demain"]:
+                    full_text = f"{relative_label} ({day_name} {slot_dt.day} {month_name}) à {slot_dt.strftime('%H:%M')}"
+                else:  # "lundi prochain", etc.
+                    full_text = f"{relative_label} ({slot_dt.day} {month_name}) à {slot_dt.strftime('%H:%M')}"
+            else:
+                full_text = base_text
             
             formatted_slots.append({
                 "id": slot.slot_id,
-                "full_text": full_date_text,
+                "full_text": full_text,
+                "base_text": base_text,
+                "relative_label": relative_label,
+                "day_name": day_name,
                 "date_only": f"{day_name} {slot_dt.day} {month_name}",
                 "time_only": slot_dt.strftime("%H:%M"),
                 "duration": f"{slot.duration_minutes} minutes",
