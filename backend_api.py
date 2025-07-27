@@ -218,7 +218,7 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
             slot_weekday = slot_date.weekday()
             today_weekday = today.weekday()
             
-            # Cas spéciaux
+            # Cas spéciaux : aujourd'hui, demain, après-demain
             if delta == 0:
                 return "aujourd'hui"
             elif delta == 1:
@@ -226,16 +226,38 @@ async def get_slots_webhook(center_id: str, request: SlotRequest):
             elif delta == 2:
                 return "après-demain"
             
-            # Semaine prochaine (du lundi au dimanche suivant)
-            days_until_next_monday = (7 - today_weekday) % 7
-            if days_until_next_monday == 0:  # Si on est lundi
-                days_until_next_monday = 7
+            # Pour les jours de cette semaine (avant dimanche)
+            # Si on est samedi (5) et le créneau est dimanche (6), c'est "demain"
+            # Déjà géré par delta == 1
+            
+            # Semaine prochaine : du lundi prochain au dimanche prochain
+            # Calculer le lundi de la semaine prochaine
+            if today_weekday == 6:  # Si on est dimanche
+                days_until_next_monday = 1
+            else:  # Sinon, jours jusqu'au lundi suivant
+                days_until_next_monday = 7 - today_weekday
             
             next_monday = today + timedelta(days=days_until_next_monday)
             next_sunday = next_monday + timedelta(days=6)
             
+            # Debug info
+            print(f"DEBUG: today={today} ({day_names[today_weekday]})")
+            print(f"DEBUG: slot_date={slot_date} ({day_names[slot_weekday]})")
+            print(f"DEBUG: delta={delta} jours")
+            print(f"DEBUG: next_monday={next_monday}, next_sunday={next_sunday}")
+            print(f"DEBUG: slot dans semaine prochaine? {next_monday <= slot_date <= next_sunday}")
+            
             if next_monday <= slot_date <= next_sunday:
                 return f"{day_names[slot_weekday]} prochain"
+            
+            # Si c'est dans la semaine courante mais après après-demain
+            if delta <= 7 and delta > 2:
+                # Vérifier si c'est cette semaine ou la suivante
+                this_week_end = today + timedelta(days=(6 - today_weekday))  # Dimanche de cette semaine
+                if slot_date <= this_week_end:
+                    return f"ce {day_names[slot_weekday]}"  # "ce jeudi", "ce vendredi"
+                else:
+                    return f"{day_names[slot_weekday]} prochain"
             
             return None
         
