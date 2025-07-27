@@ -70,44 +70,76 @@ class MockDatabase:
         vehicle_type: str,
         preferred_time: str
     ) -> List[AvailableSlot]:
-        """Génère des créneaux disponibles (simulation)"""
+        """Récupère les créneaux réels depuis l'API Simplauto"""
         
-        slots = []
-        start = datetime.fromisoformat(start_date)
-        end = datetime.fromisoformat(end_date or start_date)
+        import httpx
         
-        current = start
-        while current <= end:
-            # Ignorer les dimanches
-            if current.weekday() == 6:
-                current += timedelta(days=1)
-                continue
-            
-            # Créneaux matin
-            if preferred_time in ["morning", "any"]:
-                for hour in [8, 9, 10, 11]:
-                    slot_time = current.replace(hour=hour, minute=0, second=0)
-                    slots.append(AvailableSlot(
-                        slot_id=f"slot_{center_id}_{slot_time.strftime('%Y%m%d_%H%M')}",
-                        datetime=slot_time.isoformat(),
-                        duration_minutes=50,
-                        price=78.0 if vehicle_type == "voiture_particuliere" else 95.0
-                    ))
-            
-            # Créneaux après-midi
-            if preferred_time in ["afternoon", "any"]:
-                for hour in [14, 15, 16, 17]:
-                    slot_time = current.replace(hour=hour, minute=0, second=0)
-                    slots.append(AvailableSlot(
-                        slot_id=f"slot_{center_id}_{slot_time.strftime('%Y%m%d_%H%M')}",
-                        datetime=slot_time.isoformat(),
-                        duration_minutes=50,
-                        price=78.0 if vehicle_type == "voiture_particuliere" else 95.0
-                    ))
-            
-            current += timedelta(days=1)
+        # Mapping des types de véhicules
+        vehicle_type_mapping = {
+            "voiture_particuliere": {"vehicle_type": 6, "vehicle_engine": 1},  # Voiture Essence par défaut
+            "utilitaire": {"vehicle_type": 2, "vehicle_engine": 2},  # Utilitaire Diesel
+            "moto": {"vehicle_type": 9, "vehicle_engine": 1},  # Moto Essence
+            "camping_car": {"vehicle_type": 4, "vehicle_engine": 2}  # Camping-car Diesel
+        }
         
-        return slots[:10]  # Limiter à 10 créneaux
+        # Récupérer les paramètres pour l'API Simplauto
+        vehicle_params = vehicle_type_mapping.get(vehicle_type, {"vehicle_type": 6, "vehicle_engine": 1})
+        
+        # URL et headers pour l'API Simplauto
+        simplauto_url = "https://www.simplauto.com/private-api/slots/"
+        headers = {
+            "accept": "application/json",
+            "Authorization": "Bearer 940c066c0c2d6e1f0d302a5b44f77f8af7b236b8"
+        }
+        
+        params = {
+            "center_id": center_id,
+            "is_available": True,
+            "vehicle_engine": vehicle_params["vehicle_engine"],
+            "vehicle_type": vehicle_params["vehicle_type"]
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(simplauto_url, headers=headers, params=params, timeout=10)
+                response.raise_for_status()
+                real_slots_data = response.json()
+            
+            # Convertir vers notre format
+            slots = []
+            for slot_data in real_slots_data:
+                if slot_data.get("is_available", True):
+                    # Convertir starts_at vers datetime
+                    starts_at = slot_data.get("starts_at")
+                    if starts_at:
+                        slots.append(AvailableSlot(
+                            slot_id=slot_data.get("id", "unknown"),
+                            datetime=starts_at,
+                            duration_minutes=50,  # Valeur par défaut
+                            price=slot_data.get("price"),
+                            available=slot_data.get("is_available", True)
+                        ))
+            
+            # Filtrer par preferred_time si nécessaire
+            if preferred_time != "any":
+                filtered_slots = []
+                for slot in slots:
+                    slot_dt = datetime.fromisoformat(slot.datetime.replace('+02:00', ''))
+                    hour = slot_dt.hour
+                    
+                    if preferred_time == "morning" and 8 <= hour <= 12:
+                        filtered_slots.append(slot)
+                    elif preferred_time == "afternoon" and 13 <= hour <= 18:
+                        filtered_slots.append(slot)
+                
+                slots = filtered_slots
+            
+            return slots[:10]  # Limiter à 10 créneaux
+            
+        except Exception as e:
+            print(f"Erreur appel API Simplauto: {e}")
+            # Fallback: retourner des créneaux vides
+            return []
     
     async def create_booking(
         self, 
@@ -344,6 +376,24 @@ async def test_generate_slots(center_id: str):
     )
     
     return {"test_slots": [slot.dict() for slot in slots]}
+
+# Endpoint de test avec un vrai center_id
+@app.get("/test/real-slots")
+async def test_real_slots():
+    """Test avec un vrai center_id Simplauto"""
+    slots = await db.get_available_slots(
+        center_id="c07110e4-7ef8-49ee-9c2b-ab62a106c417",  # Vrai center_id
+        start_date="2025-07-27",
+        end_date="2025-08-10",
+        vehicle_type="voiture_particuliere",
+        preferred_time="any"
+    )
+    
+    return {
+        "message": "Test avec vrais créneaux Simplauto",
+        "slots_count": len(slots),
+        "test_slots": [slot.dict() for slot in slots[:5]]
+    }
 
 if __name__ == "__main__":
     import uvicorn
